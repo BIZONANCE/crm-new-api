@@ -94,8 +94,16 @@ function canManageUser(req, target) {
 }
 
 router.get("/", async (req, res) => {
-  const where = req.userRecord.role === "ACCOUNT_ADMIN" ? { managerId: req.userRecord.id } : {};
-  const users = await db.user.findMany({ where, select: SELECT_FIELDS, orderBy: { createdAt: "desc" } });
+  const where = req.userRecord.role === "ACCOUNT_ADMIN"
+    ? { managerId: req.userRecord.id }
+    : {};
+
+  const users = await db.user.findMany({
+    where,
+    select: SELECT_FIELDS,
+    orderBy: { createdAt: "desc" }
+  });
+
   res.json({ success: true, users });
 });
 
