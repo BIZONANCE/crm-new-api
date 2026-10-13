@@ -1,0 +1,420 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id                   String         @id @default(cuid())
+  seq                  Int            @unique @default(autoincrement())
+  memberId             String?        @unique
+  name                 String?
+  phone                String?        @unique
+  email                String         @unique
+  password             String?
+  createdAt            DateTime       @default(now())
+  role                 Role           @default(MEMBER)
+  status               UserStatus     @default(ACTIVE)
+  positionId           String?
+  inviteToken          String?        @unique
+  inviteTokenExpiresAt DateTime?
+  emailVerifiedAt      DateTime?
+  lastSeenAt           DateTime?
+  leads                Lead[]
+  salesHistory         SalesHistory[]
+  catalogActivities    CatalogActivity[]
+  position             Position?      @relation(fields: [positionId], references: [id])
+  assignedLeads        Lead[]         @relation("AssignedLeads")
+  transfersMade        LeadTransfer[] @relation("TransferBy")
+  transfersFrom        LeadTransfer[] @relation("TransferFrom")
+  transfersTo          LeadTransfer[] @relation("TransferTo")
+  deletedLeads         Lead[]         @relation("DeletedLeads")
+  sentMessages     Message[]          @relation("SentMessages")
+  receivedMessages MessageRecipient[] @relation("ReceivedMessages")
+  helpTicketsCreated  HelpTicket[]        @relation("HelpTicketsCreated")
+  helpTicketsAssigned HelpTicket[]        @relation("HelpTicketsAssigned")
+  helpTicketMessages  HelpTicketMessage[] @relation("HelpTicketMessagesSent")
+  sessionLogs          SessionLog[]
+  notifications        Notification[]
+  googlePicture        String?
+  photoUrl             String?
+  managerId            String?
+  manager              User?          @relation("TeamMembers", fields: [managerId], references: [id])
+  teamMembers          User[]         @relation("TeamMembers")
+
+  @@index([managerId])
+}
+
+model Position {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  permissions Json
+  createdAt   DateTime @default(now())
+  users       User[]
+}
+
+model Otp {
+  id        String   @id @default(cuid())
+  email     String
+  code      String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([email])
+}
+
+model EmailVerification {
+  id         String    @id @default(cuid())
+  email      String
+  code       String
+  expiresAt  DateTime
+  verified   Boolean   @default(false)
+  verifiedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([email])
+}
+
+model Lead {
+  id            String                 @id @default(cuid())
+  bizName       String
+  ownerName     String
+  contact       String
+  altContact    String?
+  state         String?
+  city          String
+  pin           String
+  address       String?
+  category      String
+  website       String?
+  google        String?
+  fb            String?
+  insta         String?
+  youtube       String?
+  linkedin      String?
+  product       String?
+  amount        Int?
+  response      String?
+  lastCall      DateTime?
+  followup      DateTime?
+  takenCall     Int?
+  meetingStatus String?
+  dealDuration  String?
+  renewalDate   DateTime?
+  closedDate    DateTime?
+  remark        String?
+  section       Section                @default(FRESH)
+  entryDate     DateTime               @default(now())
+  editedDate    DateTime               @updatedAt
+  wasEdited  Boolean  @default(false)
+  ownerId       String
+  source        String?
+  status        LeadStatus             @default(ACTIVE)
+  activities    Activity[]
+  owner         User                   @relation(fields: [ownerId], references: [id])
+  assignedToId  String?
+  assignedTo    User?                  @relation("AssignedLeads", fields: [assignedToId], references: [id])
+  transfers     LeadTransfer[]
+  services      LeadServiceSelection[]
+  starred Boolean @default(false)
+  read    Boolean @default(false)
+  deletedAt     DateTime?
+  deletedById   String?
+  deletedBy     User?                  @relation("DeletedLeads", fields: [deletedById], references: [id])
+
+  @@index([ownerId])
+  @@index([section])
+  @@index([status])
+  @@index([assignedToId])
+  @@index([deletedAt])
+}
+
+model Activity {
+  id        String   @id @default(cuid())
+  note      String
+  createdAt DateTime @default(now())
+  leadId    String
+  lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId])
+}
+
+model SalesHistory {
+  id         String      @id @default(cuid())
+  leadId     String?
+  bizName    String
+  action     AuditAction
+  changes    Json?
+  actorId    String
+  createdAt  DateTime    @default(now())
+  actor      User        @relation(fields: [actorId], references: [id])
+
+  recycledAt DateTime?
+
+  @@index([leadId])
+  @@index([actorId])
+  @@index([createdAt])
+  @@index([recycledAt])
+}
+
+model LeadTransfer {
+  id         String   @id @default(cuid())
+  leadId     String
+  fromUserId String?
+  toUserId   String?
+  byUserId   String
+  createdAt  DateTime @default(now())
+  lead       Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  fromUser   User?    @relation("TransferFrom", fields: [fromUserId], references: [id])
+  toUser     User?    @relation("TransferTo", fields: [toUserId], references: [id])
+  byUser     User     @relation("TransferBy", fields: [byUserId], references: [id])
+
+  @@index([leadId])
+}
+
+model Service {
+  id         String                 @id @default(cuid())
+  name       String                 @unique
+  amount     Int
+  createdAt  DateTime               @default(now())
+  updatedAt  DateTime               @updatedAt
+}
+
+model LeadServiceSelection {
+  id            String       @id @default(cuid())
+  leadId        String
+  catalogItemId String?
+  name          String
+  createdAt     DateTime     @default(now())
+  lead          Lead         @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  catalogItem   CatalogItem? @relation(fields: [catalogItemId], references: [id], onDelete: SetNull)
+
+  @@index([leadId])
+  @@index([catalogItemId])
+}
+
+model SessionLog {
+  id        String      @id @default(cuid())
+  userId    String
+  user      User        @relation(fields: [userId], references: [id])
+  type      SessionType
+  createdAt DateTime    @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String
+  title     String
+  message   String
+  link      String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, read])
+  @@index([createdAt])
+}
+
+model CatalogCategory {
+  id         String        @id @default(cuid())
+  name       String        @unique
+  sortOrder  Int           @default(0)
+  status     CatalogStatus @default(ACTIVE)
+  shareToken String?       @unique
+  createdAt  DateTime      @default(now())
+  items      CatalogItem[]
+}
+
+model CatalogItem {
+  id              String                 @id @default(cuid())
+  categoryId      String
+  category        CatalogCategory        @relation(fields: [categoryId], references: [id])
+  title           String
+  description     String?
+  price           Int
+  discountedPrice Int?
+  imageUrl        String?
+  sortOrder       Int                    @default(0)
+  status          CatalogStatus          @default(ACTIVE)
+  shareToken      String?                @unique
+  createdAt       DateTime               @default(now())
+  leadSelections  LeadServiceSelection[]
+
+  @@index([categoryId])
+}
+
+// One row ever — the token behind the "share whole catalog" link.
+model CatalogShare {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  createdAt DateTime @default(now())
+}
+
+// Audit trail for catalogue operations (collections, items, reorders,
+// moves, shares). Names are stored as snapshots so entries still read
+// correctly after the collection/item itself has been deleted.
+model CatalogActivity {
+  id         String   @id @default(cuid())
+  entityType String   // CATEGORY | ITEM | CATALOG
+  entityId   String?
+  entityName String
+  action     String   // CREATE | UPDATE | DELETE | MOVE | REORDER | SHARE
+  changes    Json?
+  actorId    String
+  actor      User     @relation(fields: [actorId], references: [id])
+  createdAt  DateTime @default(now())
+
+  @@index([actorId])
+  @@index([createdAt])
+}
+
+model Message {
+  id              String    @id @default(cuid())
+  subject         String
+  body            String    @db.Text
+  fromUserId      String
+  fromUser        User      @relation("SentMessages", fields: [fromUserId], references: [id])
+
+  // Every reply points threadId at the ROOT message's id (not its
+  // immediate parent), so fetching a whole thread is one flat query:
+  // where: { OR: [{ id: rootId }, { threadId: rootId }] }, ordered by
+  // createdAt. Root messages have threadId = null.
+  threadId        String?
+  thread          Message?  @relation("ThreadReplies", fields: [threadId], references: [id])
+  replies         Message[] @relation("ThreadReplies")
+
+  isBroadcast     Boolean   @default(false)
+  deletedBySender Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+
+  recipients      MessageRecipient[]
+  attachments     MessageAttachment[]
+
+  @@index([fromUserId])
+  @@index([threadId])
+}
+
+model MessageRecipient {
+  id                 String    @id @default(cuid())
+  messageId          String
+  message            Message   @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  toUserId           String
+  toUser             User      @relation("ReceivedMessages", fields: [toUserId], references: [id])
+  read               Boolean   @default(false)
+  readAt             DateTime?
+  starred            Boolean   @default(false)
+  deletedByRecipient Boolean   @default(false)
+
+  @@unique([messageId, toUserId])
+  @@index([toUserId])
+  @@index([toUserId, read])
+}
+
+model MessageAttachment {
+  id         String   @id @default(cuid())
+  messageId  String
+  message    Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  fileName   String
+  filePath   String
+  fileSize   Int
+  mimeType   String
+  uploadedAt DateTime @default(now())
+
+  @@index([messageId])
+}
+
+model HelpTicket {
+  id           String             @id @default(cuid())
+  subject      String
+  category     String?
+  priority     HelpTicketPriority @default(MEDIUM)
+  status       HelpTicketStatus   @default(OPEN)
+  createdById  String
+  createdBy    User               @relation("HelpTicketsCreated", fields: [createdById], references: [id])
+  assignedToId String?
+  assignedTo   User?              @relation("HelpTicketsAssigned", fields: [assignedToId], references: [id])
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  closedAt     DateTime?
+  messages     HelpTicketMessage[]
+
+  @@index([createdById])
+  @@index([assignedToId])
+  @@index([status])
+}
+
+model HelpTicketMessage {
+  id        String     @id @default(cuid())
+  ticketId  String
+  ticket    HelpTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  senderId  String
+  sender    User       @relation("HelpTicketMessagesSent", fields: [senderId], references: [id])
+  body      String     @db.Text
+  read      Boolean    @default(false)
+  createdAt DateTime   @default(now())
+
+  @@index([ticketId])
+}
+
+enum HelpTicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum HelpTicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum Role {
+  SUPER_ADMIN
+  ACCOUNT_ADMIN
+  MEMBER
+}
+
+enum UserStatus {
+  PENDING
+  INVITED
+  ACTIVE
+  DISABLED
+}
+
+enum Section {
+  FRESH
+  DCR
+  DSR
+}
+
+enum LeadStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  RESTORE
+}
+
+enum SessionType {
+  LOGIN
+  LOGOUT
+}
+
+enum CatalogStatus {
+  ACTIVE
+  INACTIVE
+}

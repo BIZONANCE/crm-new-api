@@ -1,0 +1,2 @@
+ALTER TYPE "UserStatus" ADD VALUE 'LEFT';
+
