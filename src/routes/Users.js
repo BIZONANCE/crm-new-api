@@ -94,16 +94,8 @@ function canManageUser(req, target) {
 }
 
 router.get("/", async (req, res) => {
-  const where = req.userRecord.role === "ACCOUNT_ADMIN"
-    ? { managerId: req.userRecord.id }
-    : {};
-
-  const users = await db.user.findMany({
-    where,
-    select: SELECT_FIELDS,
-    orderBy: { createdAt: "desc" }
-  });
-
+  const where = req.userRecord.role === "ACCOUNT_ADMIN" ? { managerId: req.userRecord.id } : {};
+  const users = await db.user.findMany({ where, select: SELECT_FIELDS, orderBy: { createdAt: "desc" } });
   res.json({ success: true, users });
 });
 
@@ -359,6 +351,32 @@ router.patch("/:id", async (req, res) => {
   res.json({ success: true, user });
 });
 
+// GET /users/:id/leads-count — how many live leads a user still holds. The
+// Delete User popup calls this when it opens to decide whether to show the
+// "transfer leads" step. Trashed leads (deletedAt set) are not counted, same
+// as the delete check below. leadIds is included so the popup can pass them
+// straight to the transfer.
+router.get("/:id/leads-count", async (req, res) => {
+  const target = await db.user.findUnique({ where: { id: req.params.id } });
+  if (!target) return res.status(404).json({ success: false, message: "User not found" });
+  if (!canManageUser(req, target)) {
+    return res.status(403).json({ success: false, message: "You don't manage this user." });
+  }
+
+  const leads = await db.lead.findMany({
+    where: { assignedToId: target.id, deletedAt: null },
+    select: { id: true },
+  });
+
+  res.json({
+    success: true,
+    count: leads.length,
+    leadCount: leads.length,
+    total: leads.length,
+    leadIds: leads.map((l) => l.id),
+  });
+});
+
 router.post("/:id/reassign-leads", async (req, res) => {
   const target = await db.user.findUnique({ where: { id: req.params.id } });
   if (!target) return res.status(404).json({ success: false, message: "User not found" });
@@ -414,33 +432,47 @@ router.post("/:id/reassign-leads", async (req, res) => {
 // Removing a user is Super-Admin-only now — Account Admin can edit, approve,
 // disable, and manage their team's positions, but not remove an account.
 router.delete("/:id", requireSuperAdmin, async (req, res) => {
-  const target = await db.user.findUnique({ where: { id: req.params.id } });
-  if (!target) return res.status(404).json({ success: false, message: "User not found" });
-  if (target.role === "SUPER_ADMIN") {
-    return res.status(400).json({ success: false, message: "The Super Admin account can't be removed" });
-  }
-  if (target.id === req.userRecord.id) {
-    return res.status(400).json({ success: false, message: "You can't remove your own account" });
-  }
-  if (target.status === "LEFT") {
-    return res.status(400).json({ success: false, message: "This user has already left" });
-  }
+  // Express 4 doesn't catch errors thrown inside async handlers, so without
+  // this try/catch a database error leaves the request hanging forever
+  // (the popup then sits on "Removing..."). Now it answers with a 500 and
+  // the real error is printed in the server log.
+  try {
+    const target = await db.user.findUnique({ where: { id: req.params.id } });
+    if (!target) return res.status(404).json({ success: false, message: "User not found" });
+    if (target.role === "SUPER_ADMIN") {
+      return res.status(400).json({ success: false, message: "The Super Admin account can't be removed" });
+    }
+    if (target.id === req.userRecord.id) {
+      return res.status(400).json({ success: false, message: "You can't remove your own account" });
+    }
+    if (target.status === "LEFT") {
+      return res.status(400).json({ success: false, message: "This user has already left" });
+    }
 
-  const stillAssigned = await db.lead.count({ where: { assignedToId: target.id } });
-  if (stillAssigned > 0) {
-    return res.status(400).json({
-      success: false,
-      message: "Transfer this user's leads before removing their account",
+    // Only live leads block removal. Leads in the trash (deletedAt set) never
+    // show in the Delete User popup, so they can't be transferred from there —
+    // counting them here made removal impossible.
+    const stillAssigned = await db.lead.count({
+      where: { assignedToId: target.id, deletedAt: null },
     });
+    if (stillAssigned > 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Transfer this user's leads before removing their account",
+      });
+    }
+
+    const user = await db.user.update({
+      where: { id: target.id },
+      data: { status: "LEFT" },
+      select: SELECT_FIELDS,
+    });
+
+    res.json({ success: true, message: "User removed", user });
+  } catch (err) {
+    console.error("remove user error:", err);
+    res.status(500).json({ success: false, message: "Could not remove this user" });
   }
-
-  const user = await db.user.update({
-    where: { id: target.id },
-    data: { status: "LEFT" },
-    select: SELECT_FIELDS,
-  });
-
-  res.json({ success: true, message: "User removed", user });
 });
 
 // Rejecting a still-PENDING/INVITED signup stays Super-Admin-only — these

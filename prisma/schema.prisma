@@ -389,6 +389,7 @@ enum UserStatus {
   INVITED
   ACTIVE
   DISABLED
+  LEFT	
 }
 
 enum Section {
