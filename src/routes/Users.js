@@ -302,6 +302,10 @@ router.patch("/:id", async (req, res) => {
     return res.status(403).json({ success: false, message: "You don't manage this user." });
   }
 
+  if (target.status === "DISABLED" && status === "ACTIVE" && req.userRecord.role !== "SUPER_ADMIN") {
+    return res.status(403).json({ success: false, message: "Only a Super Admin can reactivate users" });
+  }
+
   const isApproving = status === "ACTIVE" && target.status === "PENDING";
   const effectiveMemberId = memberId !== undefined ? memberId?.trim() : target.memberId;
   const effectiveName = name !== undefined ? name?.trim() : target.name;

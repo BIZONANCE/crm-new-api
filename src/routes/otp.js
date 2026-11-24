@@ -33,7 +33,7 @@ router.post("/send-otp", async (req, res) => {
     await db.otp.deleteMany({ where: { email } });
     await db.otp.create({ data: { email, code, expiresAt } });
 
-    const devMode = process.env.DEV_MODE === "true";
+    const devMode = String(process.env.DEV_MODE || "").toLowerCase() === "true";
 
     if (devMode) {
       console.log(`\n[DEV_MODE] OTP for ${email}: ${code}\n`);
