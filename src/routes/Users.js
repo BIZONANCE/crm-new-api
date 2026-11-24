@@ -293,16 +293,15 @@ router.patch("/:id", async (req, res) => {
     return res.status(400).json({ success: false, message: "The Super Admin account can't be modified here" });
   }
   if (target.status === "LEFT") {
-    return res.status(400).json({ success: false, message: "This user has left and can't be edited. Re-invite them instead." });
+    if (status !== "ACTIVE") {
+      return res.status(400).json({ success: false, message: "This user has left and can't be edited. Re-invite them instead." });
+    }
   }
-  // Covers both "target is an Account Admin, requester is a different
-  // Account Admin" (managerId is always null on an Account Admin, so this
-  // never matches) and "target is a Member managed by someone else".
   if (!canManageUser(req, target)) {
     return res.status(403).json({ success: false, message: "You don't manage this user." });
   }
 
-  if (target.status === "DISABLED" && status === "ACTIVE" && req.userRecord.role !== "SUPER_ADMIN") {
+  if ((target.status === "DISABLED" || target.status === "LEFT") && status === "ACTIVE" && req.userRecord.role !== "SUPER_ADMIN") {
     return res.status(403).json({ success: false, message: "Only a Super Admin can reactivate users" });
   }
 
